@@ -239,6 +239,10 @@ class Widget:
     CREAM = "#ffebcb"
     WIDTH = 239
     HEIGHT = 78
+    TAIL_CURLED = (13, 65, 5, 65, 2, 62, 2, 52, 7, 49, 12, 49,
+                   12, 54, 8, 54, 8, 59, 18, 59, 18, 65)
+    TAIL_RELAXED = (13, 65, 8, 62, 5, 59, 1, 54, 1, 50, 5, 49,
+                    8, 53, 11, 55, 14, 58, 18, 59, 18, 65)
 
     def __init__(self, root):
         self.root = root
@@ -255,6 +259,9 @@ class Widget:
         self.pin = tk.BooleanVar(value=True)
         self.drag_origin = None
         self.hover_timer = None
+        self.hover_region = None
+        self.cat_timer = None
+        self.head_offset = 0
         root.title("Codex 额度猫")
         root.overrideredirect(True)
         root.attributes("-topmost", True)
@@ -265,8 +272,9 @@ class Widget:
         self.canvas = tk.Canvas(root, bg=self.TRANSPARENT, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.draw_cat()
-        self.canvas.bind("<Enter>", self.schedule_details)
-        self.canvas.bind("<Leave>", self.hide_details)
+        self.canvas.bind("<Enter>", self.track_hover)
+        self.canvas.bind("<Motion>", self.track_hover)
+        self.canvas.bind("<Leave>", self.clear_hover)
         self.canvas.bind("<ButtonPress-1>", self.start_drag)
         self.canvas.bind("<B1-Motion>", self.drag)
         self.canvas.bind("<ButtonRelease-1>", self.finish_drag)
@@ -293,10 +301,7 @@ class Widget:
     def draw_cat(self):
         art = self.canvas
         ink, fur = self.INK, "#f4c078"
-        art.create_polygon(
-            13, 65, 5, 65, 2, 62, 2, 52, 7, 49, 12, 49, 12, 54,
-            8, 54, 8, 59, 18, 59, 18, 65, fill=fur, outline=ink, width=2,
-        )
+        self.tail = art.create_polygon(*self.TAIL_CURLED, fill=fur, outline=ink, width=2)
         art.create_polygon(
             13, 66, 13, 56, 18, 50, 43, 50, 50, 57, 50, 67,
             47, 71, 17, 71, fill=fur, outline=ink, width=2,
@@ -304,18 +309,20 @@ class Widget:
         art.create_polygon(
             13, 42, 13, 20, 17, 20, 25, 26, 42, 26, 50, 20, 54, 20,
             54, 42, 58, 47, 58, 55, 52, 61, 18, 61, 11, 55, 11, 47,
-            fill=fur, outline=ink, width=2,
+            fill=fur, outline=ink, width=2, tags="cat_head",
         )
-        art.create_polygon(17, 25, 23, 30, 17, 34, fill="#df8b83")
-        art.create_polygon(50, 25, 44, 30, 50, 34, fill="#df8b83")
-        art.create_rectangle(29, 27, 32, 34, fill="#bd7750", width=0)
-        art.create_rectangle(36, 27, 39, 34, fill="#bd7750", width=0)
-        art.create_polygon(24, 55, 28, 48, 40, 48, 45, 55, 41, 59, 27, 59, fill=self.CREAM)
+        art.create_polygon(17, 25, 23, 30, 17, 34, fill="#df8b83", tags="cat_head")
+        art.create_polygon(50, 25, 44, 30, 50, 34, fill="#df8b83", tags="cat_head")
+        art.create_rectangle(29, 27, 32, 34, fill="#bd7750", width=0, tags="cat_head")
+        art.create_rectangle(36, 27, 39, 34, fill="#bd7750", width=0, tags="cat_head")
+        art.create_polygon(24, 55, 28, 48, 40, 48, 45, 55, 41, 59, 27, 59,
+                           fill=self.CREAM, tags="cat_head")
         for x in (23, 44):
-            art.create_rectangle(x, 40, x + 3, 46, fill=ink, width=0)
+            art.create_rectangle(x, 40, x + 3, 46, fill=ink, width=0, tags="cat_head")
         for x in (16, 47):
-            art.create_rectangle(x, 48, x + 7, 51, fill="#e68f85", width=0)
-        art.create_line(30, 51, 32, 53, 34, 51, 36, 53, 38, 51, fill=ink, width=2)
+            art.create_rectangle(x, 48, x + 7, 51, fill="#e68f85", width=0, tags="cat_head")
+        art.create_line(30, 51, 32, 53, 34, 51, 36, 53, 38, 51,
+                        fill=ink, width=2, tags="cat_head")
         art.create_line(26, 66, 26, 70, fill=ink, width=2)
         art.create_line(39, 66, 39, 70, fill=ink, width=2)
         self.bubble = art.create_polygon(
@@ -336,9 +343,47 @@ class Widget:
         self.canvas.itemconfigure(self.caption, text=caption)
         self.detail_text.configure(text=details)
 
-    def schedule_details(self, _event=None):
-        if self.hover_timer is None and self.drag_origin is None:
+    def track_hover(self, event):
+        if self.drag_origin is not None:
+            return
+        region = None
+        if 70 <= event.x <= 234 and 9 <= event.y <= 61:
+            region = "bubble"
+        elif 0 <= event.x < 61 and 14 <= event.y <= 73:
+            region = "cat"
+        if region == self.hover_region:
+            return
+        self.clear_hover()
+        self.hover_region = region
+        if region == "cat":
+            self.animate_cat()
+        elif region == "bubble":
             self.hover_timer = self.root.after(280, self.show_details)
+
+    def pose_tail(self, relax):
+        points = [round(curled + (relaxed - curled) * relax)
+                  for curled, relaxed in zip(self.TAIL_CURLED, self.TAIL_RELAXED)]
+        self.canvas.coords(self.tail, *points)
+
+    def pose_head(self, offset):
+        self.canvas.move("cat_head", offset - self.head_offset, 0)
+        self.head_offset = offset
+
+    def animate_cat(self, frame=1):
+        frames_per_cycle = 20
+        phase = math.tau * frame / frames_per_cycle
+        self.pose_tail((1 - math.cos(phase)) / 2)
+        self.pose_head(round(3 * math.sin(phase)))
+        self.cat_timer = self.root.after(34, self.animate_cat, (frame + 1) % frames_per_cycle)
+
+    def clear_hover(self, _event=None):
+        self.hover_region = None
+        self.hide_details()
+        if self.cat_timer is not None:
+            self.root.after_cancel(self.cat_timer)
+            self.cat_timer = None
+            self.pose_tail(0)
+            self.pose_head(0)
 
     def show_details(self):
         self.hover_timer = None
@@ -359,7 +404,7 @@ class Widget:
         self.details.withdraw()
 
     def start_drag(self, event):
-        self.hide_details()
+        self.clear_hover()
         self.drag_origin = (event.x, event.y)
 
     def drag(self, event):
@@ -368,17 +413,20 @@ class Widget:
         y = max(0, min(event.y_root - dy, self.root.winfo_screenheight() - self.HEIGHT))
         self.root.geometry(f"+{x}+{y}")
 
-    def finish_drag(self, _event):
+    def finish_drag(self, event):
         self.drag_origin = None
-        self.schedule_details()
+        self.track_hover(event)
 
     def toggle_pin(self):
         self.root.attributes("-topmost", self.pin.get())
         self.details.attributes("-topmost", self.pin.get())
 
     def open_menu(self, event):
-        self.hide_details()
-        self.menu.tk_popup(event.x_root, event.y_root)
+        self.clear_hover()
+        try:
+            self.menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.menu.grab_release()
 
     def refresh(self):
         if self.refreshing:
@@ -444,10 +492,10 @@ class Widget:
         if estimate:
             needed, windows = estimate
             if needed > windows:
-                text = (f"猫猫算过啦！用完这窗和后续 {windows} 窗，"
+                text = (f"猫猫掰着爪子算过啦！用完这窗和后续 {windows} 窗，"
                         f"周额度还会剩约 {amount(needed - windows)}喵。")
             elif windows and needed / windows >= 0.7:
-                text = f"这周还有不少喵！若先用完这窗，后续还要用约 {amount(needed)}。"
+                text = f"趁这周还有时间，快用起来喵！若先用完这窗，后续还要用约 {amount(needed)}。"
         stale = self.error or now - self.last_sync > 2 * REFRESH
         expired = any(reset and reset <= now for reset in (short_reset, week_reset))
         status = f"上次同步 {dt.datetime.fromtimestamp(self.last_sync):%H:%M:%S} · 每 {REFRESH} 秒刷新"
@@ -466,7 +514,7 @@ class Widget:
             details.extend(("", text))
         details.extend(("", status))
         low = value <= 10
-        caption = "这周还剩不少喵！" if text else "快见底了喵！" if low else "喵～"
+        caption = "抓紧用喵，别浪费！" if text else "快见底了喵！" if low else "喵～"
         color = "#ffd6ae" if low else "#f8dfb9" if text else self.CREAM
         self.say(f"还剩 {percentage(value)}", caption, color, "\n".join(details))
         alert = (low, bool(text))

@@ -9,7 +9,7 @@
 3. 从 GitHub 选择 **Code → Download ZIP**，解压到普通文件夹，双击 **Launch-CodexQuota.cmd**。
 4. 如果安装的是 Microsoft Store 版 ChatGPT，也可以双击 **Launch-ChatGPT-and-Quota.cmd** 一起启动。
 
-鼠标移到猫猫或气泡上可以看详情。按住左键拖动。右键菜单可刷新、切换置顶、关闭提示音和退出。
+鼠标移到猫猫身上，它会摇尾巴、轻轻左右摇头。移到气泡上可以看额度详情。按住左键拖动。右键菜单可刷新、切换置顶、关闭提示音和退出。
 
 ## 怎么算
 
