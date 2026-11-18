@@ -246,6 +246,7 @@ class Widget:
 
     def __init__(self, root):
         self.root = root
+        self.animal = tk.StringVar(value="猫")
         self.points = set()
         self.current = None
         self.ratio = None
@@ -262,6 +263,8 @@ class Widget:
         self.hover_region = None
         self.cat_timer = None
         self.head_offset = 0
+        self.quota_speech = "等一下喵…"
+        self.quota_caption = "猫猫在看额度"
         root.title("Codex 额度猫")
         root.overrideredirect(True)
         root.attributes("-topmost", True)
@@ -291,11 +294,16 @@ class Widget:
         )
         self.detail_text.pack()
         self.menu = tk.Menu(root, tearoff=False)
+        animals = tk.Menu(self.menu, tearoff=False)
+        for name in ("猫", "狗", "兔子", "老鹰"):
+            animals.add_radiobutton(label=name, value=name, variable=self.animal,
+                                    command=self.switch_animal)
+        self.menu.add_cascade(label="切换动物", menu=animals)
         self.menu.add_command(label="立即刷新", command=self.refresh)
         self.menu.add_checkbutton(label="置顶", variable=self.pin, command=self.toggle_pin)
         self.menu.add_checkbutton(label="提示音", variable=self.beep)
         self.menu.add_separator()
-        self.menu.add_command(label="关闭猫猫", command=root.destroy)
+        self.menu.add_command(label="关闭桌宠", command=root.destroy)
         self.tick()
 
     def draw_cat(self):
@@ -304,7 +312,7 @@ class Widget:
         self.tail = art.create_polygon(*self.TAIL_CURLED, fill=fur, outline=ink, width=2)
         art.create_polygon(
             13, 66, 13, 56, 18, 50, 43, 50, 50, 57, 50, 67,
-            47, 71, 17, 71, fill=fur, outline=ink, width=2,
+            47, 71, 17, 71, fill=fur, outline=ink, width=2, tags="cat_body",
         )
         art.create_polygon(
             13, 42, 13, 20, 17, 20, 25, 26, 42, 26, 50, 20, 54, 20,
@@ -323,8 +331,8 @@ class Widget:
             art.create_rectangle(x, 48, x + 7, 51, fill="#e68f85", width=0, tags="cat_head")
         art.create_line(30, 51, 32, 53, 34, 51, 36, 53, 38, 51,
                         fill=ink, width=2, tags="cat_head")
-        art.create_line(26, 66, 26, 70, fill=ink, width=2)
-        art.create_line(39, 66, 39, 70, fill=ink, width=2)
+        art.create_line(26, 66, 26, 70, fill=ink, width=2, tags="cat_body")
+        art.create_line(39, 66, 39, 70, fill=ink, width=2, tags="cat_body")
         self.bubble = art.create_polygon(
             77, 9, 226, 9, 234, 17, 234, 53, 226, 61, 78, 61,
             71, 56, 61, 55, 70, 47, 70, 17,
@@ -336,12 +344,127 @@ class Widget:
         self.caption = art.create_text(
             152, 46, fill="#774d42", font=("Microsoft YaHei UI", 9),
         )
+        if self.animal.get() != "猫":
+            self.draw_other_animal()
+
+    def switch_animal(self):
+        self.clear_hover()
+        self.canvas.delete("all")
+        self.head_offset = 0
+        self.draw_cat()
+        self.root.title(f"Codex 额度{self.animal.get()}")
+        self.render(time.time())
+
+    def draw_other_animal(self):
+        art = self.canvas
+        art.delete("cat_head")
+        art.delete("cat_body")
+        if self.animal.get() == "老鹰":
+            self.draw_eagle()
+            return
+        rabbit = self.animal.get() == "兔子"
+        fur = "#fff1ef" if rabbit else "#d6af85"
+        # Replace the body and tail to match the selected character.
+        art.itemconfigure(self.tail, state="hidden" if rabbit else "normal", fill=fur)
+        art.create_oval(13, 50, 51, 72, fill=fur, outline=self.INK, width=2, tags="pet_body")
+        if rabbit:
+            self.rabbit_tail = art.create_oval(5, 57, 18, 70, fill="#fffaf7",
+                                               outline=self.INK, width=2)
+            self.ears = []
+            for _ in range(2):
+                outer = art.create_polygon(0, 0, 0, 0, fill=fur, outline=self.INK,
+                                            width=2, smooth=True)
+                inner = art.create_polygon(0, 0, 0, 0, fill="#eda9bd",
+                                            outline="", smooth=True)
+                self.ears.append((outer, inner))
+            self.pose_ears(0)
+        else:
+            self.dog_ears = []
+            for x in (9, 45):
+                ear = art.create_polygon(0, 0, 0, 0, fill="#94694d",
+                                         outline=self.INK, width=2, smooth=True)
+                self.dog_ears.append(ear)
+            self.pose_dog_ears(0)
+        art.create_oval(14, 28, 54, 61, fill=fur, outline=self.INK,
+                        width=2, tags="cat_head")
+        for x in (24, 42):
+            art.create_oval(x, 39, x + 3, 44, fill=self.INK, outline="", tags="cat_head")
+        art.create_oval(25, 47, 44, 58, fill="#fff8eb", outline="", tags="cat_head")
+        art.create_polygon(30, 48, 38, 48, 34, 52,
+                           fill="#dc8eaa" if rabbit else self.INK, tags="cat_head")
+        art.create_line(29, 53, 32, 55, 34, 53, 36, 55, 39, 53,
+                        fill=self.INK, tags="cat_head")
+        if not rabbit:
+            art.create_oval(32, 54, 37, 60, fill="#e9a0a6", outline="", tags="cat_head")
+
+    def draw_eagle(self):
+        art = self.canvas
+        art.itemconfigure(self.tail, state="hidden")
+        self.wings = [
+            art.create_polygon(0, 0, 0, 0, fill="#795c49", outline=self.INK, width=2)
+            for _ in range(2)
+        ]
+        self.pose_wings(0)
+        art.create_polygon(24, 61, 21, 73, 34, 69, 46, 73, 42, 60,
+                           fill="#5e493e", outline=self.INK, width=2)
+        art.create_oval(19, 35, 49, 67, fill="#967158", outline=self.INK, width=2)
+        art.create_polygon(22, 48, 27, 59, 34, 54, 40, 60, 46, 47,
+                           fill="#e5e8e4")
+        art.create_oval(19, 16, 50, 47, fill="#faf6e9", outline=self.INK, width=2)
+        for x in (26, 40):
+            art.create_oval(x, 28, x + 4, 33, fill=self.INK, outline="")
+        art.create_line(23, 25, 30, 27, fill=self.INK, width=2)
+        art.create_line(40, 27, 47, 25, fill=self.INK, width=2)
+        art.create_polygon(30, 35, 40, 35, 36, 45, 33, 40,
+                           fill="#edb844", outline=self.INK)
+        for x in (26, 39):
+            art.create_line(x, 65, x, 70, x - 4, 72, x, 70, x + 4, 72,
+                            fill="#b8812b", width=2)
+
+    def pose_wings(self, spread):
+        for wing, base, direction in zip(self.wings, (24, 44), (-1, 1)):
+            tip = base + direction * (9 + 11 * spread)
+            tip_y = 59 - 31 * spread
+            self.canvas.coords(
+                wing, base, 39, tip, tip_y - 8, tip + direction * 2, tip_y,
+                tip - direction * 3, tip_y - 1, tip, tip_y + 6,
+                tip - direction * 6, tip_y + 3, base, 62,
+            )
+
+    def animal_words(self, text):
+        if self.animal.get() == "老鹰":
+            return (text.replace("别玩喵，快快干活～", "啾！目标锁定，开工！")
+                    .replace("猫猫陪你一起努力！", "展翅一起冲呀！")
+                    .replace("掰着爪子", "数着羽毛")
+                    .replace("猫猫", "鹰鹰").replace("喵", "啾"))
+        if self.animal.get() == "狗":
+            return text.replace("猫猫", "狗狗").replace("喵", "汪").replace("别玩汪，快快干活～", "汪！一起努力干活～")
+        if self.animal.get() == "兔子":
+            return text.replace("猫猫", "兔兔").replace("喵", "啾").replace("别玩啾，快快干活～", "蹦蹦～该认真干活啦")
+        return text
 
     def say(self, speech, caption, color, details):
-        self.canvas.itemconfigure(self.bubble, fill=color)
-        self.canvas.itemconfigure(self.speech, text=speech)
-        self.canvas.itemconfigure(self.caption, text=caption)
-        self.detail_text.configure(text=details)
+        self.quota_speech = speech
+        self.quota_caption = caption
+        palettes = {
+            "狗": {"#ffebcb": "#dceee5", "#ffd6ae": "#bfdacb", "#f8dfb9": "#cae4d7"},
+            "兔子": {"#ffebcb": "#f4dfed", "#ffd6ae": "#eac1d8", "#f8dfb9": "#edd0e3"},
+            "老鹰": {"#ffebcb": "#dce7f3", "#ffd6ae": "#bed0e6", "#f8dfb9": "#cbdced"},
+        }
+        palette = palettes.get(self.animal.get(), {})
+        self.canvas.itemconfigure(self.bubble, fill=palette.get(color, color))
+        self.update_speech()
+        self.detail_text.configure(text=self.animal_words(details),
+                                   bg=palette.get(self.CREAM, "#fff7eb"))
+
+    def update_speech(self):
+        playing = self.hover_region == "cat"
+        self.canvas.itemconfigure(
+            self.speech, text=self.animal_words("别玩喵，快快干活～" if playing else self.quota_speech),
+        )
+        self.canvas.itemconfigure(
+            self.caption, text=self.animal_words("猫猫陪你一起努力！" if playing else self.quota_caption),
+        )
 
     def track_hover(self, event):
         if self.drag_origin is not None:
@@ -349,12 +472,13 @@ class Widget:
         region = None
         if 70 <= event.x <= 234 and 9 <= event.y <= 61:
             region = "bubble"
-        elif 0 <= event.x < 61 and 14 <= event.y <= 73:
+        elif 0 <= event.x < 61 and 0 <= event.y <= 73:
             region = "cat"
         if region == self.hover_region:
             return
         self.clear_hover()
         self.hover_region = region
+        self.update_speech()
         if region == "cat":
             self.animate_cat()
         elif region == "bubble":
@@ -369,21 +493,66 @@ class Widget:
         self.canvas.move("cat_head", offset - self.head_offset, 0)
         self.head_offset = offset
 
+    def pose_ears(self, bend):
+        for (outer, inner), base, direction in zip(self.ears, (24, 43), (-1, 1)):
+            tip = base + direction * 11 * bend
+            tip_y = 3 + 13 * bend
+            self.canvas.coords(
+                outer, base - 5, 37, base - 6, 19, tip - 5, tip_y,
+                tip + 5, tip_y, base + 6, 19, base + 5, 37,
+            )
+            self.canvas.coords(
+                inner, base - 2, 32, base - 2, 20, tip - 2, tip_y + 5,
+                tip + 2, tip_y + 5, base + 2, 20, base + 2, 32,
+            )
+
+    def pose_dog_ears(self, spread):
+        for ear, base, direction in zip(self.dog_ears, (20, 48), (-1, 1)):
+            tip = base + direction * (5 + 8 * spread)
+            tip_y = 51 - 13 * spread
+            self.canvas.coords(
+                ear, base - 4, 26, base + 4, 26,
+                tip + 5, tip_y - 4, tip + 3, tip_y + 2,
+                tip - 4, tip_y + 2, tip - 6, tip_y - 5,
+            )
+
+    def pose_rabbit_tail(self, sway):
+        self.canvas.coords(self.rabbit_tail, 5 - 3 * sway, 57 - 3 * sway,
+                           18 - 3 * sway, 70 - 3 * sway)
+
     def animate_cat(self, frame=1):
         frames_per_cycle = 20
         phase = math.tau * frame / frames_per_cycle
-        self.pose_tail((1 - math.cos(phase)) / 2)
-        self.pose_head(round(3 * math.sin(phase)))
+        bend = (1 - math.cos(phase)) / 2
+        if self.animal.get() == "老鹰":
+            self.pose_wings(bend)
+        elif self.animal.get() == "兔子":
+            self.pose_ears(bend)
+            self.pose_rabbit_tail(bend)
+        else:
+            self.pose_tail(bend)
+            if self.animal.get() == "猫":
+                self.pose_head(round(3 * math.sin(phase)))
+            else:
+                self.pose_dog_ears(bend)
         self.cat_timer = self.root.after(34, self.animate_cat, (frame + 1) % frames_per_cycle)
 
     def clear_hover(self, _event=None):
         self.hover_region = None
+        self.update_speech()
         self.hide_details()
         if self.cat_timer is not None:
             self.root.after_cancel(self.cat_timer)
             self.cat_timer = None
             self.pose_tail(0)
             self.pose_head(0)
+            if self.animal.get() == "老鹰":
+                self.pose_wings(0)
+            elif self.animal.get() == "兔子":
+                self.pose_ears(0)
+                self.pose_rabbit_tail(0)
+            elif self.animal.get() == "狗":
+                self.pose_dog_ears(0)
 
     def show_details(self):
         self.hover_timer = None
